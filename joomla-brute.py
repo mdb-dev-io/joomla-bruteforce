@@ -85,9 +85,9 @@ class Joomla():
             response = soup.find('div', {'class': 'alert-message'})
 
             if response and self.verbose:
-                print(f'\n{bcolors.FAIL}Failed: {self.username}:{password}{bcolors.ENDC}')
+                print(f'\n [-]{bcolors.FAIL}Failed: {self.username}:{password}{bcolors.ENDC}')
             elif not response:
-                print(f'\n\nPassword Found: \n\nUsername:{bcolors.OKGREEN}{self.username}{bcolors.ENDC}\nPassword:{bcolors.OKGREEN}{password}{bcolors.ENDC}')
+                print(f'\n\n{bcolors.OKGREEN}[+] Password Found:{bcolors.ENDC} \n\nUsername:{bcolors.OKGREEN}{self.username}{bcolors.ENDC}\nPassword:{bcolors.OKGREEN}{password}{bcolors.ENDC}')
                 break
 
             current_password_index += 1
