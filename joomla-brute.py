@@ -8,6 +8,7 @@ import sys  # Import sys to use sys.stdout.flush()
 
 class bcolors:
     HEADER = '\033[95m'
+    OKRED = '\033[91m'
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
     WARNING = '\033[93m'
@@ -61,7 +62,7 @@ class Joomla():
         current_password_index = 1
 
         for password in passwords:
-            sys.stdout.write(f'\rTrying password {bcolors.OKGREEN}{current_password_index}{bcolors.ENDC} of {total_passwords}: {password.decode("utf-8")}{bcolors.ENDC}\033[K')
+            sys.stdout.write(f'\r{bcolors.OKBLUE}Trying password {bcolors.OKGREEN}{current_password_index}{bcolors.ENDC}{bcolors.OKBLUE} of {total_passwords}: {bcolors.OKRED}{password.decode("utf-8")}{bcolors.ENDC}\033[K')
             sys.stdout.flush()
 
             headers = {'User-Agent': 'nano'}
@@ -87,7 +88,7 @@ class Joomla():
             if response and self.verbose:
                 print(f'\n [-]{bcolors.FAIL}Failed: {self.username}:{password}{bcolors.ENDC}')
             elif not response:
-                print(f'\n\n{bcolors.OKGREEN}[+] Password Found:{bcolors.ENDC} \n\nUsername:{bcolors.OKGREEN}{self.username}{bcolors.ENDC}\nPassword:{bcolors.OKGREEN}{password}{bcolors.ENDC}')
+                print(f'\n\n{bcolors.OKGREEN}[+] Password Found: \n\nUsername:{bcolors.ENDC}{self.username}{bcolors.OKGREEN}\nPassword:{bcolors.ENDC}{password}{bcolors.ENDC}')
                 break
 
             current_password_index += 1
